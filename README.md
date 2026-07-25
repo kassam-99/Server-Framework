@@ -278,3 +278,59 @@ Server-Framework/
 `Core/Paths.json` is a machine-specific registry auto-regenerated from the detected
 project root on startup (`Core/Emergency.py`), so the project is portable across
 machines.
+
+## Running with Docker
+
+The repository ships a production-oriented image for the **Web dashboard**
+(`Web/Web_Backend.py`, a Flask app on port **5000**). The image runs as an
+unprivileged user (`appuser`, UID 10001) and installs only the dependencies the
+dashboard requires (`flask`, `psutil`, `requests`, `websockets`, `python-dotenv`).
+
+### Quick start (Docker Compose)
+
+```bash
+docker compose up --build
+```
+
+Then open the dashboard at:
+
+- <http://localhost:5000> (redirects to the login page)
+
+Compose publishes container port `5000` on the host and persists generated
+reports in the named volume `dashboard-data` (mounted at `/app/Data`). Set a
+stable `SERVER_FRAMEWORK_SECRET_KEY` in `docker-compose.yml` (or your shell
+environment) so login sessions survive container restarts.
+
+Stop and remove the stack with:
+
+```bash
+docker compose down
+```
+
+### Build and run manually
+
+```bash
+docker build -t server-framework-web .
+docker run --rm -p 5000:5000 \
+  -e SERVER_FRAMEWORK_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')" \
+  server-framework-web
+```
+
+Inside the container the app binds to `0.0.0.0:5000` with Flask debug **off**.
+
+### Bluetooth / BLE features are unavailable in-container
+
+The **Bluetooth** and **AI BLE report** pages depend on `bleak` (and optionally
+`openai`), which require direct access to the **host Bluetooth adapter**. A
+container has no Bluetooth stack, so these dependencies are intentionally omitted
+from the image and those pages **degrade gracefully** (the underlying imports are
+lazy and guarded by `try/except`). To use BLE scanning, run the dashboard
+directly on a Bluetooth-capable host instead:
+
+```bash
+pip install -r requirements.txt bleak openai
+python Web/Web_Backend.py --host 0.0.0.0 --port 5000
+```
+
+Docker here provides reproducible dependencies for the web service, not device
+access.

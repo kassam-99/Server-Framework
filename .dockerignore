@@ -1,0 +1,47 @@
+# Version control
+.git
+.gitignore
+
+# Python caches / build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Editors
+.vscode/
+.idea/
+
+# Test / tooling caches
+.pytest_cache/
+tests/
+Test/
+
+# Runtime-generated logs, state and reports (rebuilt at runtime)
+*.log
+Logs/
+Core/Main_logger.log
+Core/Paths.json
+Web/Main_logger.log
+Web/WebSpiderBlueLogs/
+Data/*.csv
+Data/*.txt
+Data/*.json
+
+# Node
+node_modules/
+
+# Docker artifacts
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Docs / large assets not needed at runtime
+docs/
+*.md
+Class_Case.png

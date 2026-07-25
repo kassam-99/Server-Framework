@@ -1,0 +1,17 @@
+services:
+  web-dashboard:
+    build: .
+    image: server-framework-web
+    container_name: server-framework-web
+    ports:
+      - "5000:5000"
+    environment:
+      # Set a stable secret so sessions survive restarts. Change this value.
+      - SERVER_FRAMEWORK_SECRET_KEY=change-me-to-a-long-random-value
+    volumes:
+      # Persist generated reports (CSV/TXT/JSON) written to Data/.
+      - dashboard-data:/app/Data
+    restart: unless-stopped
+
+volumes:
+  dashboard-data:
