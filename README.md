@@ -10,6 +10,46 @@ disk, temperature, battery, fans, network, users). It exposes several control
 surfaces — a socket admin panel, a Flask web dashboard, an FTP server, and now a
 single branded **CLI control center**: `dashboard.py`.
 
+## Architecture
+
+The two live control surfaces — the **Admin TCP server** and the **Flask web
+dashboard** — run independently and both drive the same `Core/` modules. The
+admin server accepts a client, authenticates it (three failures ban the IP),
+then dispatches text commands to handlers; the web dashboard serves a browser UI
+whose Bluetooth pages fan out to the BLE scanners and pipe results through the
+report generator.
+
+```mermaid
+flowchart LR
+    subgraph Clients
+        AC["Admin socket client<br/>Admin/Admin.py"]
+        BR["Web browser"]
+    end
+
+    subgraph AdminServer["Admin TCP server (Admin/AdminPanel.py)"]
+        TCP["TCP_Server accept loop<br/>auth + IP ban"]
+        HAND["Command handlers<br/>list / show / stop / restart / map"]
+    end
+
+    subgraph WebDash["Web dashboard - Flask (Web/Web_Backend.py)"]
+        FLASK["Routes<br/>login + sessions"]
+        BLE["BLE scanners<br/>BlueWeb + BluewebParseai"]
+        RPT["Report Generator<br/>CSV / TXT / JSON"]
+    end
+
+    CORE["Core modules<br/>ScriptEngine / ModeManager<br/>SysMonitor / ProcessManager"]
+
+    AC -->|"TCP localhost:3000"| TCP
+    TCP --> HAND
+    HAND --> CORE
+    BR -->|"HTTP 127.0.0.1:5000"| FLASK
+    FLASK --> BLE
+    BLE --> RPT
+    FLASK --> CORE
+```
+
+<!-- ![Dashboard](docs/screenshots/dashboard.png) -->
+
 ## The idea
 
 Everything hangs off a small set of `Core/` modules that discover the project
