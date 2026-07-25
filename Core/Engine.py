@@ -1,5 +1,6 @@
 # Libraries to handle I/O files, folders and Manage a system  Server-Framework
 import os
+import shlex
 import subprocess
 import uuid
 import psutil
@@ -212,9 +213,16 @@ class ScriptEngine(ProcessEngine):
             self.engine_logs.print_and_log(f"{self.project_name_terminal} [\u001b[31m!\u001b[0m] Unsupported script type: {start_script_name}", "CRITICAL")
             return
 
-        command = f"{interpreter} {script_path}"
+        # Shell-escape the path and any params so spaces / quotes / metacharacters
+        # cannot break the command or inject extra shell commands.
+        command = f"{interpreter} {shlex.quote(script_path)}"
         if params:
-            command += " " + (" ".join(params) if isinstance(params, list) else str(params))
+            if isinstance(params, list):
+                param_tokens = [str(p) for p in params]
+            else:
+                # A single string may hold several space-separated arguments.
+                param_tokens = shlex.split(str(params))
+            command += " " + " ".join(shlex.quote(p) for p in param_tokens)
             self.Script_Params[start_script_name] = {'Params': params}
 
         if isinstance(start_user_choice_terminal, int):
@@ -233,6 +241,34 @@ class ScriptEngine(ProcessEngine):
             self.engine_logs.LogsMessages(f"{self.project_name_terminal} [\u001b[31m!\u001b[0m] Error starting script: {e}", "ERROR")
 
 
+    def _resolve_launched_pid(self, script_path, fallback_pid):
+        """Best-effort resolution of the real interpreter/script PID.
+
+        The script is launched inside a terminal emulator, so subprocess.Popen
+        only owns the emulator process. Poll psutil briefly for the process whose
+        cmdline actually references the script path (excluding the keep-open
+        wrapper shell), and fall back to the emulator PID if none is found.
+        """
+        if not script_path:
+            return fallback_pid
+        deadline = time.time() + 3
+        while time.time() < deadline:
+            for proc in psutil.process_iter(['pid', 'cmdline']):
+                try:
+                    cmdline = proc.info.get('cmdline') or []
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+                if proc.pid == fallback_pid:
+                    continue
+                joined = ' '.join(cmdline)
+                # The interpreter process runs "<interpreter> <script_path>";
+                # the wrapper shell contains "exec bash", so skip it.
+                if script_path in joined and 'exec bash' not in joined:
+                    return proc.pid
+            time.sleep(0.2)
+        return fallback_pid
+
+
     def execute_script(self, command, choice_terminal, script_name, queue):
         if self.system_type != "Linux":
             self.engine_logs.print_and_log(f"{self.project_name_terminal} [\u001b[31m!\u001b[0m] Unsupported OS: {self.system_type}", "CRITICAL")
@@ -245,16 +281,20 @@ class ScriptEngine(ProcessEngine):
             queue.put((None, None))
             return
         
-        wrapped_command = f"bash -c '{command}; exec bash'"
-        
+        # Keep the launched shell open after the script finishes. `command` is
+        # already shlex-quoted, so we pass the inner script as a separate argv
+        # element (bash -c <inner>) instead of interpolating it into another
+        # single-quoted string -- that avoids the nested-quote command injection.
+        inner_command = f"{command}; exec bash"
+
         if choice_terminal == "konsole":
-            cmd = [choice_terminal, "--noclose", "-e", wrapped_command]
+            cmd = [choice_terminal, "--noclose", "-e", "bash", "-c", inner_command]
         elif choice_terminal in ["xfce4-terminal", "lxterminal", "xterm"]:
-            cmd = [choice_terminal, "-e", wrapped_command]
+            cmd = [choice_terminal, "-e", "bash", "-c", inner_command]
         elif choice_terminal == "terminator":
-            cmd = [choice_terminal, "-x", "bash", "-c", wrapped_command]
+            cmd = [choice_terminal, "-x", "bash", "-c", inner_command]
         elif choice_terminal == "screen":
-            cmd = [choice_terminal, "-dmS", "script_session", wrapped_command]
+            cmd = [choice_terminal, "-dmS", "script_session", "bash", "-c", inner_command]
         else:
             self.engine_logs.print_and_log(f"{self.project_name_terminal} [\u001b[31m!\u001b[0m] Unsupported terminal: {choice_terminal}", "ERROR")
             queue.put((None, None))
@@ -263,9 +303,13 @@ class ScriptEngine(ProcessEngine):
         try:
             self.engine_logs.print_and_log(f"{self.project_name_terminal} [\u001b[34m+\u001b[0m] Launching: {' '.join(cmd)}", "DEBUG")
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            pid = process.pid
-            creation_time = psutil.Process(pid).create_time()  
-            queue.put((pid, creation_time))  
+            # process.pid is the terminal emulator's PID (often short-lived for
+            # terminator/screen). Resolve the actual interpreter/script PID so the
+            # tracking / status features report the real process.
+            script_path = self.Engine_PathSettings.checkpath(script_name)
+            pid = self._resolve_launched_pid(script_path, fallback_pid=process.pid)
+            creation_time = psutil.Process(pid).create_time()
+            queue.put((pid, creation_time))
             
         except FileNotFoundError:
             self.engine_logs.print_and_log(f"{self.project_name_terminal} [\u001b[31m!\u001b[0m] Terminal '{choice_terminal}' not found on system", "ERROR")
@@ -370,7 +414,26 @@ class ScriptEngine(ProcessEngine):
                 self.engine_logs.print_and_log(f"{self.project_name_terminal} [\u001b[31m!\u001b[0m] Error checking status for {script_name}: {e}", "ERROR")
         
 
-    def rename_running(self):
+    def rename_running(self, script_name=None, new_name=None):
+        # Non-interactive path (e.g. driven over the admin socket): rename a
+        # known script directly without reading from the server's stdin.
+        if script_name is not None and new_name is not None:
+            if script_name not in self.Script_Operation:
+                self.engine_logs.print_and_log(f"{self.project_name_terminal} [[31m![0m] {script_name} not found in running scripts.", "WARNING")
+                return
+            if new_name in self.Script_Operation:
+                self.engine_logs.print_and_log(f"{self.project_name_terminal} [[31m![0m] {new_name} already exists. Choose a different name.", "WARNING")
+                return
+            script_info = self.Script_Operation[script_name]
+            terminal_old = script_info.get('terminal')
+            real_name = script_info.get('Script Name')
+            self.stop_running(script_name=script_name, stop_all=True)
+            time.sleep(1)
+            self.start_running(start_script_name=real_name, start_user_choice_terminal=terminal_old, start_script_nickname=new_name)
+            self.engine_logs.print_and_log(f"[[34m+[0m] {script_name} -> {new_name} changed successfully!")
+            self.Engine_Realtime_Process.send_notification("Information - Rename", f"{script_name} -> {new_name} changed successfully")
+            return
+
         # List all running scripts and prompt user selection
         script_list = list(self.Script_Operation.items())
         if not script_list:
@@ -413,7 +476,23 @@ class ScriptEngine(ProcessEngine):
             self.engine_logs.print_and_log(f"{self.project_name_terminal} [\u001b[31m!\u001b[0m] Invalid input. Please enter a number.", "WARNING")
     
         
-    def restart_script(self):
+    def restart_script(self, script_name=None):
+        # Non-interactive path (e.g. driven over the admin socket): restart a
+        # known script directly without reading from the server's stdin.
+        if script_name is not None:
+            if script_name not in self.Script_Operation:
+                self.engine_logs.print_and_log(f"{self.project_name_terminal} [[31m![0m] {script_name} not found in running scripts.", "WARNING")
+                return
+            script_info = self.Script_Operation[script_name]
+            terminal = script_info['terminal']
+            real_name = script_info.get('Script Name')
+            self.stop_running(script_name=script_name, stop_all=True)
+            time.sleep(1)
+            self.start_running(start_script_name=real_name, start_user_choice_terminal=terminal, start_script_nickname=script_name)
+            self.engine_logs.print_and_log(f"[[34m+[0m] Script '{script_name}' restarted successfully.")
+            self.Engine_Realtime_Process.send_notification("Information - Restart", f"Script '{script_name}' restarted successfully.")
+            return
+
         # List all running scripts and prompt user selection
         script_list = list(self.Script_Operation.items())
         if not script_list:

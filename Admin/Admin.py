@@ -17,11 +17,13 @@ class AdminChatClient:
         try:
             self.client.connect((self.ip, self.port))
             self.client.send(self.credentials.encode())  # Send the credentials as a single string
-            self.client_thread()
-            
+
+            # Read and validate the auth reply BEFORE starting the chat threads.
+            # The server sends a colorized "[+] Authentication successful!" line,
+            # so match on the stable substring rather than an exact string.
             authentication_result = self.client.recv(self.MSize).decode(errors='ignore')
-    
-            if authentication_result == "Authentication successful!":
+
+            if "Authentication successful" in authentication_result:
                 self.get_host_name_ip()
                 print(f"\n{projet_name_admin} [$] Chat started")
                 self.client_thread()

@@ -1,7 +1,8 @@
-from flask import Flask, request, jsonify, redirect, url_for, render_template, send_file
+from flask import Flask, request, jsonify, redirect, url_for, render_template, send_file, session
 from BlueWeb import run_bluetooth_scan
 from WebSysMonitor import Sensor, PersonalInfo
 from BluewebParseai import BlueAi
+from functools import wraps
 import asyncio
 import csv
 import os
@@ -19,6 +20,22 @@ users = {
 messages = []
 wifi_messages = []  # List for Wi-Fi-specific messages
 latest_bluetooth_devices = []  # Store latest scan results for download
+
+
+def login_required(view):
+    """Authorize protected routes from the Flask session, not the URL.
+
+    The acting user is whoever logged in (``session['user']``); the ``<username>``
+    in the path must match that session, so an unauthenticated client can no
+    longer reach another user's pages just by typing their name in the URL.
+    """
+    @wraps(view)
+    def wrapped(username, *args, **kwargs):
+        if session.get('user') != username or username not in users:
+            messages.append("Error: Unauthorized access attempt")
+            return redirect(url_for('login'))
+        return view(username, *args, **kwargs)
+    return wrapped
 
 # Define the help message
 help_message = """
@@ -72,6 +89,7 @@ def login():
         username = request.form['username']
         password = request.form['password']
         if username in users and users[username] == password:
+            session['user'] = username
             messages.append(f"Info: User {username} logged in successfully")
             return redirect(url_for('dashboard', username=username))
         else:
@@ -79,6 +97,7 @@ def login():
     return render_template('0xLogin.html', error=error)
 
 @app.route('/dashboard/<username>')
+@login_required
 def dashboard(username):
     if username not in users:
         messages.append("Error: Unauthorized access attempt")
@@ -86,6 +105,7 @@ def dashboard(username):
     return render_template('0xDashboard.html', username=username, messages=messages)
 
 @app.route('/help/<username>')
+@login_required
 def help(username):
     if username not in users:
         messages.append("Error: Unauthorized access attempt")
@@ -95,6 +115,7 @@ def help(username):
     return redirect(url_for('dashboard', username=username))
 
 @app.route('/0XHelp/<username>')
+@login_required
 def xhelp(username):
     if username not in users:
         messages.append("Error: Unauthorized access attempt")
@@ -103,6 +124,7 @@ def xhelp(username):
     return render_template('0xHelp.html', username=username)
 
 @app.route('/wifi/<username>')
+@login_required
 def wifi(username):
     if username not in users:
         wifi_messages.append("Error: Unauthorized access attempt")
@@ -115,6 +137,7 @@ def wifi(username):
     return render_template('0xWIFI.html', username=username, wifi_messages=wifi_messages)
 
 @app.route('/bluetooth/<username>')
+@login_required
 def bluetooth(username):
     global latest_bluetooth_devices
     if username not in users:
@@ -203,6 +226,7 @@ def bluetooth(username):
     return render_template('0xBluetooth.html', username=username, status_messages=status_messages, bluetooth_devices=bluetooth_devices, scan_completed=scan_completed)
 
 @app.route('/download_scan_report/<username>')
+@login_required
 def download_scan_report(username):
     if username not in users:
         messages.append("Error: Unauthorized access attempt")
@@ -258,6 +282,7 @@ def download_scan_report(username):
 #     )
 
 @app.route('/info/<username>')
+@login_required
 def info(username):
     if username not in users:
         messages.append("Error: Unauthorized access attempt")
@@ -271,6 +296,7 @@ def info(username):
     return redirect(url_for('dashboard', username=username))
 
 @app.route('/myinfo/<username>')
+@login_required
 def myinfo(username):
     if username not in users:
         messages.append("Error: Unauthorized access attempt")
@@ -285,6 +311,7 @@ def myinfo(username):
     return redirect(url_for('dashboard', username=username))
 
 @app.route('/clear_dashboard_messages/<username>')
+@login_required
 def clear_dashboard_messages(username):
     if username not in users:
         messages.append("Error: Unauthorized access attempt")
@@ -295,6 +322,7 @@ def clear_dashboard_messages(username):
     return redirect(url_for('dashboard', username=username))
 
 @app.route('/clear_wifi_messages/<username>')
+@login_required
 def clear_wifi_messages(username):
     if username not in users:
         wifi_messages.append("Error: Unauthorized access attempt")
@@ -305,22 +333,24 @@ def clear_wifi_messages(username):
     return redirect(url_for('wifi', username=username))
 
 @app.route('/change_password/<username>', methods=['POST'])
+@login_required
 def change_password(username):
-    if username not in users:
-        messages.append("Error: Unauthorized access attempt")
-        return redirect(url_for('login'))
-    
-    new_password = request.form['new_password']
-    if new_password:
+    current_password = request.form.get('current_password', '')
+    new_password = request.form.get('new_password', '')
+    # Require the current password so a session cannot silently overwrite it.
+    if current_password != users.get(username):
+        messages.append("Error: Current password is incorrect")
+    elif not new_password:
+        messages.append("Error: New password cannot be empty")
+    else:
         users[username] = new_password
         messages.append(f"Success: Password updated for {username}")
-    else:
-        messages.append("Error: New password cannot be empty")
-    
+
     return redirect(url_for('dashboard', username=username))
 
 @app.route('/logout')
 def logout():
+    session.pop('user', None)
     messages.append("Info: User logged out")
     return redirect(url_for('login'))
 

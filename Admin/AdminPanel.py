@@ -51,10 +51,10 @@ class Admin:
             
         self.main_commands = {
             "list": lambda: self.AdminModes.list_modes(True),
-            "rename": lambda *_: self.AdminEngine.rename_running(),
-            "stop": lambda *_: self.AdminEngine.stop_running(),
+            "rename": lambda name, new_name: self.AdminEngine.rename_running(script_name=name, new_name=new_name),
+            "stop": lambda name: self.AdminEngine.stop_running(script_name=name, stop_all=True),
             "stop_all": self.AdminEngine.stop_all_running,
-            "restart": lambda *_: self.AdminEngine.restart_script(),
+            "restart": lambda name: self.AdminEngine.restart_script(script_name=name),
             "map": lambda: self.AdminModes.list_modes(True),
             "info": self.AdminSensor.Start_Sensor,
             "show": self.AdminEngine.show_running,
@@ -264,6 +264,10 @@ class AdminConnection(AdminControl):
                 content = f.read().strip()
                 if content:
                     self.banned_ips = json.loads(content)
+                    # Legacy files shipped an empty object ({}); coerce any
+                    # non-list content to a list so .append() never crashes.
+                    if not isinstance(self.banned_ips, list):
+                        self.banned_ips = []
                 else:
                     self.banned_ips = []
         except FileNotFoundError:
@@ -300,7 +304,15 @@ class AdminConnection(AdminControl):
 
     def authenticate_user(self, connection):
         credentials = self.Recv_Admin(self.client_socket)
-        username, password = credentials.split(',')
+        # Guard against malformed input: an empty line (disconnect), a line with
+        # no comma, or an empty field must not raise and unwind the accept loop.
+        # split(',', 1) also allows passwords that themselves contain commas.
+        parts = credentials.split(',', 1)
+        if len(parts) != 2 or not parts[0] or not parts[1]:
+            self.Send_Admin(f"{projet_name_admin} [[31m![0m] Authentication failed. Malformed credentials. Closing connection.", self.client_socket, "critical")
+            self.client_socket.close()
+            return
+        username, password = parts[0], parts[1]
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.AdminLog.print_and_log(f"{projet_name_admin} [\033[33m+\033[0m] Time: {current_time}")
         if self.client_address[0] in self.banned_ips:

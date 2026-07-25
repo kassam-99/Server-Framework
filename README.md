@@ -234,7 +234,7 @@ throttle. Covered by a real loopback transfer test in `tests/test_ftp.py`.
 python3 -m pytest -q
 ```
 
-Current status: **33 passed**. The suite (`tests/`) covers pure logic, an import
+Current status: **31 passed, 1 skipped**. The suite (`tests/`) covers pure logic, an import
 smoke test for every library module, a loopback FTP handshake + file-transfer test
 on an ephemeral port, and the `dashboard.py` contract (`--demo` exits 0, `--help`
 works, and non-TTY stdin exits promptly with bounded output).

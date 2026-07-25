@@ -258,7 +258,7 @@ def action_launchers():
         ("Flask web dashboard", f"{PY} Web/Web_Backend.py --host 127.0.0.1 --port 5000",
          "browser UI (add --debug for local dev only)"),
         ("FTP file server", f"{PY} Other/FTP/ftp_server.py --path ./shared --host 127.0.0.1 --port 2121",
-         "pyftpdlib share (user/test by default)"),
+         "pyftpdlib share (test/test by default)"),
     ]
     if RICH:
         t = Table(box=box.MINIMAL_HEAVY_HEAD, border_style="yellow")

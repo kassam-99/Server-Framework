@@ -488,6 +488,7 @@
             <span class="close-btn" onclick="closeModal()">×</span>
             <h2>Change Password</h2>
             <form method="POST" action="{{ url_for('change_password', username=username) }}">
+                <input type="password" name="current_password" placeholder="Current Password" required>
                 <input type="password" name="new_password" placeholder="New Password" required>
                 <button type="submit">Update Password</button>
             </form>
