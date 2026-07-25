@@ -1,20 +1,22 @@
 import threading
-import os
-import sys
 import queue
 
-# Get the project root directory (two levels up from the script)
+import os
+import sys
+
+Project_Folder = "Server-Framework"
 project_root = os.path.abspath(__file__)
-index = project_root.find("All_in_One_Server")
+index = project_root.find(Project_Folder)
+index_length_project = len(Project_Folder)
 if index != -1:
-    core_dir = project_root[:index+18]+"Core"
+    core_dir = project_root[:index+index_length_project+1]+"Core"
 sys.path.append(core_dir)
+        
 
 from Settings import UDP_Server
 
 
-server = UDP_Server()
-server.start_udp_server()
+server = None
 
 
 def RecvData(sock,recvPackets):
@@ -53,4 +55,6 @@ def RunServer():
 
 
 if __name__ == "__main__":
+    server = UDP_Server()
+    server.start_udp_server()
     RunServer()

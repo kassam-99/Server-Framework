@@ -51,10 +51,10 @@ class Admin:
             
         self.main_commands = {
             "list": lambda: self.AdminModes.list_modes(True),
-            "rename": lambda r_parm=None, f_parm=None: self.AdminEngine.rename_running(r_parm, f_parm),
-            "stop": lambda parm=None: self.AdminEngine.stop_running(parm),
+            "rename": lambda *_: self.AdminEngine.rename_running(),
+            "stop": lambda *_: self.AdminEngine.stop_running(),
             "stop_all": self.AdminEngine.stop_all_running,
-            "restart": lambda parm=None: self.AdminEngine.restart_script(parm),
+            "restart": lambda *_: self.AdminEngine.restart_script(),
             "map": lambda: self.AdminModes.list_modes(True),
             "info": self.AdminSensor.Start_Sensor,
             "show": self.AdminEngine.show_running,

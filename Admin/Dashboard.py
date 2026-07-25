@@ -54,8 +54,8 @@ class Dashboard_Panel:
             "read": banner,
             "admin_start": lambda: self.launch_admin_panel("start"),
             "admin_stop": lambda: self.launch_admin_panel("stop"),
-            #"web_start": lambda: self.launch_web_panel("start"), Create a folder named 'Web'. Inside All_in_One_Server, use Flask (or other libraries) to develop the back-end, and HTML, CSS, and JavaScript for the front-end. Then, uncomment the relevant lines of code.
-            # "web_stop": lambda: self.launch_web_panel("stop"),  Name back-end script: Web_Backend.py
+            "web_start": lambda: self.launch_web_panel("start"),
+            "web_stop": lambda: self.launch_web_panel("stop"),
         }
 
 
@@ -74,10 +74,10 @@ class Dashboard_Panel:
 
     def main(self, func, *args, **kwargs):
         try:
-            with StringIO() as self.capture_output:
-                sys.stdout = self.capture_output
+            with StringIO() as buf:
+                sys.stdout = buf
                 func(*args, **kwargs)
-                output = self.capture_output.getvalue()
+                output = buf.getvalue()
         finally:
             sys.stdout = sys.__stdout__
 

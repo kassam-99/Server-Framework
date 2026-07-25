@@ -2,13 +2,14 @@ import threading
 import os
 import sys
 
-# Get the project root directory (two levels up from the script)
+Project_Folder = "Server-Framework"
 project_root = os.path.abspath(__file__)
-index = project_root.find("All_in_One_Server")
+index = project_root.find(Project_Folder)
+index_length_project = len(Project_Folder)
 if index != -1:
-    core_dir = project_root[:index+18]+"Core"
+    core_dir = project_root[:index+index_length_project+1]+"Core"
 sys.path.append(core_dir)
-
+        
 from Settings import TCP_Server
 
 
@@ -52,19 +53,20 @@ def server_thread(client_socket):
 
 
 
-while True:
-    server = TCP_Server()
-    server.start_TCP_Server()
+if __name__ == "__main__":
+    while True:
+        server = TCP_Server()
+        server.start_TCP_Server()
 
-    client_socket, addr = server.tcp_handler.accept()
+        client_socket, addr = server.tcp_handler.accept()
 
-    print("[>] Accepted connection from: %s:%d" % (addr[0], addr[1]))
-    print("[$] Chat started")
-    
-    try:
-        server_thread(client_socket)
+        print("[>] Accepted connection from: %s:%d" % (addr[0], addr[1]))
+        print("[$] Chat started")
 
-    except Exception as e:
-        print(f"Error: {e}")
-        server.close()
-        break
+        try:
+            server_thread(client_socket)
+
+        except Exception as e:
+            print(f"Error: {e}")
+            server.close()
+            break

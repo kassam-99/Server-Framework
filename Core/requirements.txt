@@ -1,0 +1,18 @@
+# Deprecated: use the top-level requirements.txt at the project root instead.
+# Kept for backwards compatibility; mirrors the canonical dependency list.
+#
+#   pip install -r ../requirements.txt
+
+psutil==7.2.2
+requests==2.32.5
+websockets==16.0
+flask==3.1.3
+python-dotenv==1.1.0
+pyftpdlib==2.2.0
+plyer==2.1.0
+matplotlib==3.11.0
+# bleak        # optional: BLE scanning
+# openai       # optional: AI vulnerability reports
+# scapy        # optional: network discovery (Test/test1.py)
+# netifaces    # optional: interface discovery (Test/test1.py)
+# networkx     # optional: network map (Test/test1.py)

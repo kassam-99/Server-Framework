@@ -19,4 +19,5 @@ async def chat_client():
                 print(f"\nReceived: {response}\n")
 
 
-asyncio.run(chat_client())
+if __name__ == "__main__":
+    asyncio.run(chat_client())

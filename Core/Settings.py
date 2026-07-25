@@ -42,8 +42,8 @@ class Path_Settings:
             ".env", ".cfg", ".config", ".ini", ".toml", ".lock",
             
             # Documentation & ReadMe Files
-            ".md", ".txt", ".rst", ".adoc", ".rtf", ".doc", ".docx", ".pdf", ".CSV", ".csv"
-            
+            ".md", ".txt", ".rst", ".adoc", ".rtf", ".doc", ".docx", ".pdf", ".CSV", ".csv",
+
             # Version Control & Git
             ".gitignore", ".gitattributes", ".gitmodules",
             
@@ -312,12 +312,11 @@ class Server_Settings:
     @staticmethod
     def check_for_port(p1, p2):
         for port in range(p1, p2+1):
-            socket_port = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            socket_port.settimeout(1)
-            available_port = socket_port.connect_ex(('localhost', port))
-            if available_port != 0:
-                return port
-            socket_port.close()
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as socket_port:
+                socket_port.settimeout(1)
+                available_port = socket_port.connect_ex(('localhost', port))
+                if available_port != 0:
+                    return port
         raise Exception("[!] Couldn't find an open port")
     
     
@@ -546,14 +545,16 @@ class HTTP_Server(Server_Settings):
             self.Log.print_and_log("[!] HTTP_Handler must be set before starting the server", "WARNING")
             return  # Don't proceed if the handler is not set
         self.server_details("HTTP", self.http_server_ip, self.http_server_port)
-        
+
+        Run_server = None
         try:
             Run_server = HTTPServer((self.http_server_ip, self.http_server_port), self.HTTP_Handler)
             Run_server.serve_forever()
-            
+
         except Exception as e:
             self.Log.print_and_log(f"[!] Error accepting HTTP connection: {e}", "ERROR")
-            Run_server.server_close()
+            if Run_server is not None:
+                Run_server.server_close()
 
         
      
@@ -564,6 +565,111 @@ class HTTP_Server(Server_Settings):
 
 
 
+
+
+class UDP_Server(Server_Settings):
+    def __init__(self, udp_server_ip=None, udp_server_port=None):
+        super().__init__()
+        try:
+            if udp_server_ip is None:
+                self.udp_server_ip = "localhost"
+            elif not isinstance(udp_server_ip, str):
+                self.Log.print_and_log("[!] udp_server_ip must be a string", "CRITICAL")
+                self.udp_server_ip = "localhost"
+            else:
+                self.udp_server_ip = udp_server_ip
+
+            if udp_server_port is None:
+                self.udp_server_port = self.check_for_port(8100, 8199)
+            elif not isinstance(udp_server_port, int):
+                self.Log.print_and_log("[!] udp_server_port must be an integer", "CRITICAL")
+                self.udp_server_port = 8100
+            else:
+                self.udp_server_port = udp_server_port
+
+            self.udp_server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.udp_server.bind((self.udp_server_ip, self.udp_server_port))
+
+        except Exception as e:
+            self.Log.print_and_log(f"[!] Error setting up UDP server: {e}", "ERROR")
+            raise
+
+    def start_udp_server(self):
+        try:
+            self.server_details("UDP", self.udp_server_ip, self.udp_server_port)
+        except Exception as e:
+            self.Log.print_and_log(f"[!] Error starting UDP server: {e}", "ERROR")
+
+
+class FTP_Server(Server_Settings):
+    """A thin wrapper around pyftpdlib exposing a simple, configurable FTP server.
+
+    pyftpdlib is imported lazily so that importing Settings never fails when the
+    optional dependency is missing; the feature degrades gracefully instead.
+    """
+
+    def __init__(self, ftp_server_ip=None, ftp_server_port=None):
+        super().__init__()
+        self.ftp_server_ip = ftp_server_ip if isinstance(ftp_server_ip, str) else "127.0.0.1"
+        if ftp_server_port is None:
+            self.ftp_server_port = self.check_for_port(2121, 2199)
+        elif isinstance(ftp_server_port, int):
+            self.ftp_server_port = ftp_server_port
+        else:
+            self.ftp_server_port = 2121
+
+        # Default credentials / shared directory (override before starting).
+        self.ftp_username = "user"
+        self.ftp_password = "12345"
+        self.ftp_user_path = os.getcwd()
+        self.ftp_user_permission = "elradfmwMT"
+        self.ftp_anonymous_path = None
+        self.ftp_anonymous_permission = "elr"
+        self.server = None
+
+        # dtp_handler is a class (ThrottledDTPHandler) whose write_limit/read_limit
+        # class attributes callers may tune before start_ftp_server().
+        try:
+            from pyftpdlib.handlers import ThrottledDTPHandler
+            self.dtp_handler = ThrottledDTPHandler
+        except ImportError:
+            self.dtp_handler = None
+            self.Log.print_and_log("[!] pyftpdlib not installed; FTP throttling unavailable", "WARNING")
+
+    def start_ftp_server(self):
+        try:
+            from pyftpdlib.authorizers import DummyAuthorizer
+            from pyftpdlib.handlers import FTPHandler
+            from pyftpdlib.servers import FTPServer
+        except ImportError:
+            self.Log.print_and_log("[!] pyftpdlib not installed; cannot start FTP server", "CRITICAL")
+            return
+
+        authorizer = DummyAuthorizer()
+        user_path = self.ftp_user_path or os.getcwd()
+        os.makedirs(user_path, exist_ok=True)
+        authorizer.add_user(self.ftp_username, self.ftp_password, user_path, perm=self.ftp_user_permission)
+        if self.ftp_anonymous_path:
+            os.makedirs(self.ftp_anonymous_path, exist_ok=True)
+            authorizer.add_anonymous(self.ftp_anonymous_path, perm=self.ftp_anonymous_permission)
+
+        handler = FTPHandler
+        handler.authorizer = authorizer
+        if self.dtp_handler is not None:
+            handler.dtp_handler = self.dtp_handler
+
+        try:
+            self.server_details("FTP", self.ftp_server_ip, self.ftp_server_port)
+        except Exception:
+            pass
+
+        self.server = FTPServer((self.ftp_server_ip, self.ftp_server_port), handler)
+        try:
+            self.server.serve_forever()
+        except Exception as e:
+            self.Log.print_and_log(f"[!] Error running FTP server: {e}", "ERROR")
+        finally:
+            self.server.close_all()
 
 
 if __name__ == "__main__":

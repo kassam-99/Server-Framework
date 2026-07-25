@@ -4,7 +4,12 @@ import time
 import psutil
 import platform
 import os
-from plyer import notification
+try:
+    from plyer import notification
+except ImportError:
+    # plyer is an optional dependency used only for desktop notifications.
+    # The framework degrades gracefully when it is not installed.
+    notification = None
 
 # Other:
 from Log import Logs
@@ -458,7 +463,9 @@ class RealTime_Process:
 
     def send_notification(self, title, message):
         try:
-            if platform.system() == "Linux":
+            if notification is None:
+                self.LogSys.LogsMessages("Desktop notifications unavailable (plyer not installed).")
+            elif platform.system() == "Linux":
                 notification.notify(
                     title=title,
                     message=message,

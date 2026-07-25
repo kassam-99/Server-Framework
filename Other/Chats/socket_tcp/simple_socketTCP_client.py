@@ -1,11 +1,7 @@
 import socket
 import threading
 
-  
-ip = 'localhost' #input("[*] Enter IP of server: ")
-port = int(input("[*] Enter port of server: "))
-client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client.connect((ip, port))
+client = None
 
 
 
@@ -77,14 +73,19 @@ def client_thread():
         
         
         
-while True:
-    try:
-        get_Host_name_IP()
-        print("[$] Chat started")
-        client_thread()
-        
-        
-    except Exception as e:
-        print(f'[!] Error handling message from server: 2{e}')
-        client.close()
-        break     
+if __name__ == "__main__":
+    ip = 'localhost'  # input("[*] Enter IP of server: ")
+    port = int(input("[*] Enter port of server: "))
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.connect((ip, port))
+
+    while True:
+        try:
+            get_Host_name_IP()
+            print("[$] Chat started")
+            client_thread()
+
+        except Exception as e:
+            print(f'[!] Error handling message from server: 2{e}')
+            client.close()
+            break

@@ -1,21 +1,21 @@
+# Server-Framework runtime dependencies
+# Pinned to versions verified working on Python 3.13.
+# Install with:  pip install -r requirements.txt
 
+# --- Core (required) ---
+psutil==7.2.2          # process / system sensor inspection
+requests==2.32.5       # HTTP client (public IP, MAC vendor lookup)
+websockets==16.0       # example WebSocket chat servers/clients
+flask==3.1.3           # Web dashboard (Web/Web_Backend.py)
+python-dotenv==1.1.0   # load OPENAI_API_KEY and other secrets from .env
+pyftpdlib==2.2.0       # FTP server (Core Settings.FTP_Server, Other/FTP)
 
-
-
-asyncio==3.4.3
-websockets==12.0
-httpserver==1.1.0
-ssh==1.8.0
-paramiko==2.12.0
-pyftpdlib==1.5.9
-
-
-requests==2.31.0
-
-
-gputil==1.4.0
-plyer==2.1.0
-uuid==1.30
-
-
-psutil==5.9.4
+# --- Optional (features degrade gracefully via lazy imports if absent) ---
+rich                   # branded CLI dashboard (dashboard.py); plain ANSI fallback if absent
+plyer==2.1.0           # desktop notifications (Core/SysMonitor.py)
+matplotlib==3.11.0     # network map rendering (Test/test1.py)
+# bleak                # BLE scanning (Web/BlueWeb.py, Web/BluewebParseai.py)
+# openai               # AI-driven BLE vulnerability reports (Web/BluewebParseai.py)
+# scapy                # ARP / traceroute / OS fingerprinting (Test/test1.py)
+# netifaces            # network interface discovery (Test/test1.py)
+# networkx             # graph model for the network map (Test/test1.py)
